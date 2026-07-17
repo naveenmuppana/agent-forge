@@ -1,22 +1,35 @@
-# agent-forge - Created by Naveen Muppana
-
-# My AI Agent Platform
-
-A modular AI agent framework, redesigned and personal to the user. This platform provides foundational capabilities for chat, tool-based agents, and Retrieval-Augmented Generation (RAG) backed by MongoDB Atlas.
-
-## Structure
-- `agent_service.py`: FastAPI application providing endpoints for chat, weather agents, and RAG.
-- `chat_client.py`: Standalone interactive chat interface.
-- `weather_agent.py`: CLI agent demonstrating tool-calling (Weather API).
-- `core.py`: Central utility module for configuration, OpenAI/MongoDB clients, and shared logic.
-
-## Functionality
-- **Chat**: Direct LLM interaction.
-- **Tools**: Automated weather forecasting via Open-Meteo.
-- **RAG**: Document ingestion and semantic search using MongoDB Atlas Vector Search.
-
-## Getting Started
-1. Install dependencies: `pip install -r requirements.txt`
-2. Configure `.env` file.
-3. Start the service: `uvicorn agent_service:app --reload`
 # agent-forge
+
+🚀 **Your Modular AI Agent Framework**
+
+Built and maintained by **[Naveen Muppana](https://github.com/naveenmuppana)**.
+
+---
+
+## 💡 About
+`agent-forge` is a lightweight, modular foundation for building intelligent AI agents. It provides a structured path from direct LLM interactions to complex, tool-calling agents and RAG-enabled document search.
+
+## 🛠 Features
+- **FastAPI Backend**: Deployable service for chat and agent logic.
+- **Tool-Calling**: Out-of-the-box weather agent integration.
+- **RAG Capability**: Semantic search and Q&A powered by MongoDB Atlas.
+- **Modular Core**: Clean separation of concerns for easier maintenance and customization.
+
+## 📂 Project Structure
+- `agent_service.py`: Main API application.
+- `chat_client.py`: Interactive CLI client.
+- `weather_agent.py`: Agent demonstrating function calling.
+- `core.py`: Shared utilities and client configurations.
+
+## 🚀 Getting Started
+```bash
+git clone https://github.com/naveenmuppana/agent-forge.git
+cd agent-forge
+pip install -r requirements.txt
+# Configure your .env file
+uvicorn agent_service:app --reload
+```
+
+---
+
+*Built for rapid AI experimentation and production-ready agent deployment.*
