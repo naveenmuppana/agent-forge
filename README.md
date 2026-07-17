@@ -1,3 +1,5 @@
+# agent-forge - Created by Naveen Muppana
+
 # My AI Agent Platform
 
 A modular AI agent framework, redesigned and personal to the user. This platform provides foundational capabilities for chat, tool-based agents, and Retrieval-Augmented Generation (RAG) backed by MongoDB Atlas.

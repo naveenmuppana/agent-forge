@@ -1,3 +1,4 @@
+# Author: Naveen Muppana
 import logging
 
 from core import OPENAI_MODEL, get_openai_client
