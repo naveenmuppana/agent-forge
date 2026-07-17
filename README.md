@@ -17,3 +17,4 @@ A modular AI agent framework, redesigned and personal to the user. This platform
 1. Install dependencies: `pip install -r requirements.txt`
 2. Configure `.env` file.
 3. Start the service: `uvicorn agent_service:app --reload`
+# agent-forge
