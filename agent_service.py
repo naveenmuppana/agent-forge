@@ -12,8 +12,8 @@ from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_mongodb import MongoDBAtlasVectorSearch
 from langchain_openai import ChatOpenAI
 
-from basic_openai_weather import get_basic_llm_response
-from openai_mcp_weather import run_agent as weather_agent_run
+from chat_client import get_basic_llm_response
+from weather_agent import run_agent as weather_agent_run
 from core import (
     OPENAI_MODEL,
     get_embeddings,
@@ -337,6 +337,121 @@ Question:
         instruction=_rag_instruction,
         top_chunks=response_chunks,
     )
+
+
+# -------------------- MULTI-AGENT ASSISTANT API --------------------
+# Pipeline and design: docs/ARCHITECTURE.md. The Assistant is created on first use
+# (it needs OPENAI_API_KEY) and resumes any task interrupted by a restart.
+
+_assistant_instance = None
+
+
+def _assistant():
+    global _assistant_instance
+    if _assistant_instance is None:
+        from assistant.orchestrator import Assistant
+
+        try:
+            _assistant_instance = Assistant()
+        except ValueError as exc:
+            raise HTTPException(status_code=500, detail=str(exc)) from exc
+        resumed = _assistant_instance.resume_running()
+        if resumed:
+            logger.info("Resumed %s interrupted assistant task(s).", len(resumed))
+    return _assistant_instance
+
+
+class TaskRequest(BaseModel):
+    message: str = Field(..., min_length=1)
+    source: str = Field(default="chat", pattern="^(chat|email|cron|webhook)$")
+    user_id: str = "default"
+
+
+class ApproveRequest(BaseModel):
+    approve: List[str] = Field(default_factory=list)
+    reject: List[str] = Field(default_factory=list)
+
+
+class ClarifyRequest(BaseModel):
+    answer: str = Field(..., min_length=1)
+
+
+class FeedbackRequest(BaseModel):
+    rating: Optional[str] = Field(default=None, pattern="^(up|down)$")
+    correction: str = ""
+    preferences: dict = Field(default_factory=dict)
+    undo: bool = False
+
+
+def _task_view(state) -> dict:
+    return {
+        "task_id": state.task_id,
+        "status": state.status.value,
+        "report": state.report,
+        "pending_approvals": [
+            {"action_id": a.action_id, "kind": a.kind, "summary": a.summary, "params": a.params}
+            for a in state.pending_approvals
+        ],
+        "steps": [
+            {"step_id": s.step_id, "capability": s.capability, "instruction": s.instruction,
+             "status": state.results[s.step_id].status.value if s.step_id in state.results else "pending"}
+            for s in (state.plan.steps if state.plan else [])
+        ],
+        "replans": state.replans,
+        "llm_calls": state.llm_calls,
+        "cost_usd": round(state.cost_usd, 4),
+        "errors": state.errors,
+    }
+
+
+def _load_or_404(task_id: str):
+    state = _assistant().get(task_id)
+    if state is None:
+        raise HTTPException(status_code=404, detail=f"No task {task_id}")
+    return state
+
+
+@app.post("/assistant/task")
+def assistant_submit(req: TaskRequest):
+    logger.info("Received /assistant/task from source=%s.", req.source)
+    return _task_view(_assistant().submit(req.message, source=req.source, user_id=req.user_id))
+
+
+@app.get("/assistant/task/{task_id}")
+def assistant_get(task_id: str):
+    return _task_view(_load_or_404(task_id))
+
+
+@app.post("/assistant/task/{task_id}/approve")
+def assistant_approve(task_id: str, req: ApproveRequest):
+    _load_or_404(task_id)
+    return _task_view(_assistant().approve(task_id, approve=req.approve, reject=req.reject))
+
+
+@app.post("/assistant/task/{task_id}/clarify")
+def assistant_clarify(task_id: str, req: ClarifyRequest):
+    _load_or_404(task_id)
+    return _task_view(_assistant().clarify(task_id, req.answer))
+
+
+@app.post("/assistant/task/{task_id}/feedback")
+def assistant_feedback(task_id: str, req: FeedbackRequest):
+    _load_or_404(task_id)
+    learned = _assistant().feedback(task_id, rating=req.rating, correction=req.correction,
+                                    preferences=req.preferences, undo=req.undo)
+    return {"learned": learned}
+
+
+@app.get("/assistant/learning")
+def assistant_learning(user_id: str = "default"):
+    """What the assistant has learned (lessons, playbooks, prompt candidates)."""
+    return _assistant().learner.digest(user_id)
+
+
+@app.delete("/assistant/lessons/{lesson_id}")
+def assistant_forget_lesson(lesson_id: str):
+    _assistant().store.delete("lessons", lesson_id)
+    return {"deleted": lesson_id}
 
 
 @app.get("/")

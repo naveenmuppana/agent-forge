@@ -12,3 +12,5 @@ langchain-text-splitters
 python-multipart
 pypdf
 python-docx
+pyyaml
+requests

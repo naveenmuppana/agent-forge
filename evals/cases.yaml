@@ -1,0 +1,14 @@
+# Seed eval cases for the planner. The Learner appends regression cases from failed
+# episodes to the `eval_cases` collection; both sets gate prompt promotion.
+- raw_input: "Will it rain in Delhi tomorrow?"
+  expect_capabilities: [utility]
+  max_steps: 2
+- raw_input: "What does my lease say about the notice period?"
+  expect_capabilities: [knowledge]
+  max_steps: 2
+- raw_input: "Check the weather in Pune and draft an email to my team saying whether Friday's offsite is still on"
+  expect_capabilities: [utility, comms]
+  max_steps: 3
+- raw_input: "Put a 30 minute hold with priya@example.com on Thursday morning and add a to-do to prepare the agenda"
+  expect_capabilities: [calendar, tasks]
+  max_steps: 3

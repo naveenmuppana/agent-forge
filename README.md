@@ -21,6 +21,14 @@ Built and maintained by **[Naveen Muppana](https://github.com/naveenmuppana)**.
 - `weather_agent.py`: Agent demonstrating function calling.
 - `core.py`: Shared utilities and client configurations.
 
+## 🤖 Personal Multi-Agent Assistant (`assistant/`)
+A pipeline of cooperating agents (Intake → Context → Planner → Router → Specialists → Guardian → Verifier → Reporter → Learner) that completes tasks end to end, recovers from errors, and learns from every episode. Full design: [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- `POST /assistant/task` submits a goal. Approve escalated actions with `/assistant/task/{id}/approve`, and send 👍/👎 or corrections with `/assistant/task/{id}/feedback`.
+- What it may do on its own is set **only** by [assistant/policy.yaml](assistant/policy.yaml).
+- `python -m evals.run_evals` is the weekly self-improvement job: it proposes prompt changes and promotes them only if evals don't regress.
+- Calendar, comms and tasks use local store-backed adapters; swap in real API clients to go live.
+- Run the tests (offline, no keys needed): `python -m unittest discover -s tests -t .`
+
 ## 🚀 Getting Started
 ```bash
 git clone https://github.com/naveenmuppana/agent-forge.git

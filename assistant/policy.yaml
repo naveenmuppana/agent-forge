@@ -1,0 +1,31 @@
+# Autonomy policy read by the Guardian. ONLY YOU edit this file; the Learner never writes it.
+#
+# Order of evaluation for each proposed action:
+#   1. deny            -> never performed
+#   2. always_escalate -> always asks you, even if a standing rule matches
+#   3. risk "read"     -> allowed
+#   4. risk "reversible-write" -> allowed if auto_reversible is true
+#   5. standing_rules  -> an "irreversible-or-external" action is allowed if a rule matches
+#   6. otherwise       -> escalated to you (one-tap approve via POST /assistant/task/{id}/approve)
+
+auto_reversible: true
+
+deny:
+  - "*.delete_account"
+
+always_escalate:          # money, credentials, permissions: never autonomous
+  - "*.pay*"
+  - "*.transfer*"
+  - "*.purchase*"
+  - "*.share_credentials"
+  - "*.change_permissions"
+
+standing_rules:
+  # Example rules; edit to taste. Matching: `kind` is a glob; every `when` condition must hold.
+  - name: "Email people at my own domain"
+    kind: "comms.send_email"
+    when:
+      to_endswith: ["@example.com"]
+  - name: "Confirm meetings I already put a hold on"
+    kind: "calendar.confirm_event"
+    when: {}
