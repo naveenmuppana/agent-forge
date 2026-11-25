@@ -2,10 +2,13 @@
 import logging
 import os
 import csv
+import uuid
 from io import BytesIO
+from pathlib import Path
 from typing import List, Optional
 
-from fastapi import FastAPI, File, HTTPException, UploadFile
+from fastapi import BackgroundTasks, FastAPI, File, HTTPException, UploadFile
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
 from langchain_text_splitters import RecursiveCharacterTextSplitter
@@ -365,6 +368,7 @@ class TaskRequest(BaseModel):
     message: str = Field(..., min_length=1)
     source: str = Field(default="chat", pattern="^(chat|email|cron|webhook)$")
     user_id: str = "default"
+    wait: bool = True   # False: return the task_id at once and run in the background (poll GET)
 
 
 class ApproveRequest(BaseModel):
@@ -386,15 +390,26 @@ class FeedbackRequest(BaseModel):
 def _task_view(state) -> dict:
     return {
         "task_id": state.task_id,
+        "request": state.envelope.raw_input,
+        "intent": state.envelope.intent,
+        "updated_at": state.updated_at.isoformat(),
         "status": state.status.value,
         "report": state.report,
+        "actions_taken": [
+            {"kind": e.action.kind, "summary": e.action.summary, "params": e.action.params}
+            for r in state.results.values() for e in r.effects
+        ],
+        "lessons_used": state.context.lessons,
         "pending_approvals": [
             {"action_id": a.action_id, "kind": a.kind, "summary": a.summary, "params": a.params}
             for a in state.pending_approvals
         ],
         "steps": [
             {"step_id": s.step_id, "capability": s.capability, "instruction": s.instruction,
-             "status": state.results[s.step_id].status.value if s.step_id in state.results else "pending"}
+             "depends_on": s.depends_on,
+             "status": state.results[s.step_id].status.value if s.step_id in state.results else "pending",
+             "output": state.results[s.step_id].output if s.step_id in state.results else "",
+             "attempts": state.results[s.step_id].attempts if s.step_id in state.results else 0}
             for s in (state.plan.steps if state.plan else [])
         ],
         "replans": state.replans,
@@ -412,9 +427,31 @@ def _load_or_404(task_id: str):
 
 
 @app.post("/assistant/task")
-def assistant_submit(req: TaskRequest):
-    logger.info("Received /assistant/task from source=%s.", req.source)
-    return _task_view(_assistant().submit(req.message, source=req.source, user_id=req.user_id))
+def assistant_submit(req: TaskRequest, background: BackgroundTasks):
+    logger.info("Received /assistant/task from source=%s (wait=%s).", req.source, req.wait)
+    a = _assistant()
+    if not req.wait:
+        task_id = uuid.uuid4().hex[:12]
+
+        def _run():
+            try:
+                a.submit(req.message, source=req.source, user_id=req.user_id, task_id=task_id)
+            except Exception:
+                logger.exception("Background task %s crashed.", task_id)
+
+        background.add_task(_run)
+        return {"task_id": task_id, "status": "queued"}
+    return _task_view(a.submit(req.message, source=req.source, user_id=req.user_id))
+
+
+@app.get("/assistant/tasks")
+def assistant_list(limit: int = 20):
+    return [_task_view(s) for s in _assistant().recent(min(max(limit, 1), 100))]
+
+
+@app.get("/ui", include_in_schema=False)
+def assistant_ui():
+    return FileResponse(Path(__file__).resolve().parent / "frontend" / "index.html")
 
 
 @app.get("/assistant/task/{task_id}")

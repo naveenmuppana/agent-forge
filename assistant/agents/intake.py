@@ -16,6 +16,7 @@ class IntakeResult(BaseModel):
     intent: str
     urgency: Literal["low", "normal", "high"] = "normal"
     actionable: bool = True
+    changes_irreversible_action: bool = False
     clarification_question: str = ""
 
 
@@ -33,5 +34,9 @@ class IntakeAgent:
                                       IntakeResult)
         except LLMError:
             tri = IntakeResult(intent=env.raw_input[:60])   # degrade: let the planner try anyway
+        # Hard rule (models over-ask): only stop for the user when the gap affects an
+        # irreversible action. Anything else proceeds; agents can look it up.
+        if not tri.actionable and not tri.changes_irreversible_action:
+            tri.actionable, tri.clarification_question = True, ""
         env.intent, env.urgency = tri.intent, tri.urgency
         return env, None, tri

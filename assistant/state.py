@@ -22,6 +22,7 @@ class Store(Protocol):
     def load_task(self, task_id: str) -> Optional[TaskState]: ...
     def find_active_by_dedupe(self, key: str) -> Optional[TaskState]: ...
     def task_ids_with_status(self, status: str) -> list[str]: ...
+    def recent_tasks(self, limit: int = 20) -> list[TaskState]: ...
     def put(self, collection: str, doc: dict[str, Any]) -> None: ...
     def find(self, collection: str, filt: dict[str, Any] | None = None) -> list[dict[str, Any]]: ...
     def delete(self, collection: str, doc_id: str) -> None: ...
@@ -53,6 +54,10 @@ class InMemoryStore:
     def task_ids_with_status(self, status: str) -> list[str]:
         return [tid for tid, raw in self._tasks.items() if raw["status"] == status]
 
+    def recent_tasks(self, limit: int = 20) -> list[TaskState]:
+        raws = sorted(self._tasks.values(), key=lambda r: r["updated_at"], reverse=True)[:limit]
+        return [TaskState.model_validate(r) for r in raws]
+
     def put(self, collection: str, doc: dict[str, Any]) -> None:
         self._cols.setdefault(collection, {})[doc["_id"]] = dict(doc)
 
@@ -67,9 +72,16 @@ class InMemoryStore:
 
 class MongoStore:
     def __init__(self) -> None:
-        from core import get_mongo_collection  # lazy: tests never need Mongo
+        # One client for the store's lifetime: MongoClient pools connections itself, and
+        # creating one per call (as core.get_mongo_collection does) costs a TLS handshake each time.
+        import certifi
+        from pymongo import MongoClient
 
-        self._col = lambda name: get_mongo_collection(DB_NAME, name)
+        from core import get_mongo_uri  # lazy: tests never need Mongo
+
+        ca = os.getenv("MONGODB_TLS_CA_FILE") or certifi.where()
+        self._db = MongoClient(get_mongo_uri(), tlsCAFile=ca)[DB_NAME]
+        self._col = lambda name: self._db[name]
         self._tasks = self._col("tasks")
 
     def save_task(self, state: TaskState) -> None:
@@ -89,6 +101,9 @@ class MongoStore:
 
     def task_ids_with_status(self, status: str) -> list[str]:
         return [d["_id"] for d in self._tasks.find({"status": status}, {"_id": 1})]
+
+    def recent_tasks(self, limit: int = 20) -> list[TaskState]:
+        return [TaskState.model_validate(d) for d in self._tasks.find().sort("updated_at", -1).limit(limit)]
 
     def put(self, collection: str, doc: dict[str, Any]) -> None:
         self._col(collection).replace_one({"_id": doc["_id"]}, doc, upsert=True)

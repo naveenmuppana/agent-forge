@@ -1,0 +1,424 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Agent Forge</title>
+<style>
+:root {
+  --bg: #f6f7f9; --panel: #ffffff; --panel-2: #f0f2f5; --line: #e2e5ea;
+  --text: #1b1f24; --muted: #646d78; --accent: #2f6feb; --accent-ink: #ffffff;
+  --ok: #1a7f37; --ok-bg: #dcf5e3; --warn: #9a6700; --warn-bg: #fff3cd;
+  --bad: #c62828; --bad-bg: #fde2e1; --run: #2f6feb; --run-bg: #e0eaff;
+  --shadow: 0 1px 2px rgba(0,0,0,.05), 0 2px 8px rgba(0,0,0,.04);
+  --radius: 10px;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #0f1216; --panel: #171b21; --panel-2: #1e232b; --line: #2a313b;
+    --text: #e6e9ee; --muted: #9aa4b0; --accent: #4c8dff; --accent-ink: #0b0d10;
+    --ok: #4ac26b; --ok-bg: #12301c; --warn: #e3b341; --warn-bg: #3a2e0f;
+    --bad: #ff6b6b; --bad-bg: #3b1616; --run: #6ea3ff; --run-bg: #16264a;
+    --shadow: none;
+  }
+}
+* { box-sizing: border-box; }
+body { margin: 0; background: var(--bg); color: var(--text); font-size: 14px; line-height: 1.5; }
+button, input, textarea { font: inherit; color: inherit; }
+button { cursor: pointer; border: 1px solid var(--line); background: var(--panel); border-radius: 8px; padding: 7px 12px; }
+button:hover { border-color: var(--muted); }
+button.primary { background: var(--accent); color: var(--accent-ink); border-color: var(--accent); font-weight: 600; }
+button.danger { color: var(--bad); }
+button:disabled { opacity: .5; cursor: default; }
+textarea, input[type=text] { width: 100%; background: var(--panel); border: 1px solid var(--line); border-radius: 8px; padding: 9px 11px; }
+textarea:focus, input:focus { outline: 2px solid var(--accent); outline-offset: -1px; }
+
+.app { display: grid; grid-template-columns: 280px 1fr; min-height: 100vh; }
+aside { background: var(--panel); border-right: 1px solid var(--line); display: flex; flex-direction: column; }
+.brand { padding: 16px; display: flex; align-items: center; gap: 10px; border-bottom: 1px solid var(--line); }
+.brand b { font-size: 16px; }
+.dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); margin-left: auto; }
+.dot.ok { background: var(--ok); } .dot.bad { background: var(--bad); }
+nav { padding: 10px; display: grid; gap: 4px; border-bottom: 1px solid var(--line); }
+nav button { text-align: left; border: none; background: none; }
+nav button.active { background: var(--panel-2); font-weight: 600; }
+.history { overflow-y: auto; flex: 1; padding: 8px; }
+.history h4 { margin: 6px 8px; font-size: 11px; text-transform: uppercase; letter-spacing: .06em; color: var(--muted); }
+.hitem { display: block; width: 100%; text-align: left; border: none; background: none; padding: 8px; border-radius: 8px; }
+.hitem:hover, .hitem.active { background: var(--panel-2); }
+.hitem .q { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.hitem .meta { display: flex; gap: 6px; align-items: center; margin-top: 3px; font-size: 12px; color: var(--muted); }
+
+main { padding: 24px; max-width: 960px; width: 100%; }
+.card { background: var(--panel); border: 1px solid var(--line); border-radius: var(--radius); box-shadow: var(--shadow); padding: 16px; margin-bottom: 16px; }
+.card h3 { margin: 0 0 10px; font-size: 13px; text-transform: uppercase; letter-spacing: .05em; color: var(--muted); }
+.row { display: flex; gap: 8px; align-items: center; flex-wrap: wrap; }
+.spacer { flex: 1; }
+.muted { color: var(--muted); }
+.chips { display: flex; gap: 6px; flex-wrap: wrap; margin-top: 8px; }
+.chip { font-size: 12px; border-radius: 999px; padding: 4px 10px; }
+
+.pill { display: inline-flex; align-items: center; gap: 5px; font-size: 12px; font-weight: 600; border-radius: 999px; padding: 2px 9px; white-space: nowrap; }
+.pill.done { color: var(--ok); background: var(--ok-bg); }
+.pill.failed { color: var(--bad); background: var(--bad-bg); }
+.pill.waiting_approval, .pill.needs_input, .pill.blocked { color: var(--warn); background: var(--warn-bg); }
+.pill.running, .pill.planning, .pill.queued, .pill.pending { color: var(--run); background: var(--run-bg); }
+.spin { width: 10px; height: 10px; border: 2px solid currentColor; border-right-color: transparent; border-radius: 50%; animation: spin .8s linear infinite; }
+@keyframes spin { to { transform: rotate(360deg); } }
+
+.pipeline { display: flex; gap: 0; margin: 14px 0 4px; overflow-x: auto; }
+.stage { flex: 1; min-width: 92px; text-align: center; font-size: 12px; color: var(--muted); position: relative; padding-top: 18px; }
+.stage::before { content: ""; position: absolute; top: 5px; left: 0; right: 0; height: 2px; background: var(--line); }
+.stage::after { content: ""; position: absolute; top: 0; left: calc(50% - 6px); width: 12px; height: 12px; border-radius: 50%; background: var(--panel); border: 2px solid var(--line); }
+.stage.done { color: var(--text); } .stage.done::before { background: var(--ok); } .stage.done::after { background: var(--ok); border-color: var(--ok); }
+.stage.now { color: var(--run); font-weight: 600; } .stage.now::after { border-color: var(--run); background: var(--run-bg); }
+.stage.stop { color: var(--warn); font-weight: 600; } .stage.stop::after { border-color: var(--warn); background: var(--warn-bg); }
+.stage.fail { color: var(--bad); font-weight: 600; } .stage.fail::after { border-color: var(--bad); background: var(--bad-bg); }
+
+.step { border: 1px solid var(--line); border-radius: 8px; padding: 10px 12px; margin-top: 8px; }
+.step .cap { font-weight: 600; text-transform: capitalize; }
+.step .out { margin-top: 8px; padding: 8px 10px; background: var(--panel-2); border-radius: 6px; white-space: pre-wrap; }
+.approval { border: 1px solid var(--warn); background: var(--warn-bg); border-radius: 8px; padding: 12px; margin-top: 8px; }
+.approval .kv { display: grid; grid-template-columns: 70px 1fr; gap: 2px 10px; margin: 8px 0; }
+.approval .kv dt { color: var(--muted); } .approval .kv dd { margin: 0; overflow-wrap: anywhere; }
+.approval pre { white-space: pre-wrap; background: var(--panel); padding: 10px; border-radius: 6px; margin: 6px 0 10px; font-family: inherit; }
+.report { white-space: pre-wrap; font-size: 15px; }
+.stats { display: flex; gap: 18px; flex-wrap: wrap; font-size: 12px; color: var(--muted); }
+.stats b { color: var(--text); font-size: 14px; display: block; }
+ul.plain { margin: 0; padding-left: 18px; }
+details summary { cursor: pointer; color: var(--muted); }
+.thumbs button.sel { border-color: var(--accent); background: var(--run-bg); }
+.lesson { display: flex; gap: 10px; align-items: center; padding: 8px 0; border-bottom: 1px solid var(--line); }
+.lesson:last-child { border-bottom: none; }
+.bar { width: 70px; height: 6px; background: var(--panel-2); border-radius: 3px; overflow: hidden; flex-shrink: 0; }
+.bar i { display: block; height: 100%; background: var(--accent); }
+.empty { color: var(--muted); text-align: center; padding: 28px 0; }
+.toast { position: fixed; bottom: 20px; left: 50%; transform: translateX(-50%); background: var(--text); color: var(--bg); padding: 9px 16px; border-radius: 8px; opacity: 0; transition: opacity .2s; pointer-events: none; }
+.toast.show { opacity: 1; }
+.src { font-size: 12px; color: var(--muted); }
+
+@media (max-width: 760px) {
+  .app { grid-template-columns: 1fr; }
+  aside { border-right: none; border-bottom: 1px solid var(--line); }
+  .history { max-height: 220px; }
+  main { padding: 16px; }
+}
+</style>
+</head>
+<body>
+<div class="app">
+  <aside>
+    <div class="brand"><b>Agent Forge</b><span class="muted">assistant</span><span id="health" class="dot" title="API status"></span></div>
+    <nav>
+      <button data-view="task" class="active">✦ New task</button>
+      <button data-view="learning">◎ What I've learned</button>
+      <button data-view="docs">▤ Documents</button>
+    </nav>
+    <div class="history"><h4>Recent tasks</h4><div id="history"></div></div>
+  </aside>
+
+  <main>
+    <!-- TASK VIEW -->
+    <section id="view-task">
+      <div class="card">
+        <textarea id="prompt" rows="3" placeholder="What should I take care of? e.g. Check if it rains in Pune today and draft an email to my landlord about the leaking tap"></textarea>
+        <div class="row" style="margin-top:10px">
+          <span class="muted">Ctrl+Enter to run</span><span class="spacer"></span>
+          <button id="run" class="primary">Run task</button>
+        </div>
+        <div class="chips" id="examples"></div>
+      </div>
+      <div id="task"></div>
+    </section>
+
+    <!-- LEARNING VIEW -->
+    <section id="view-learning" hidden>
+      <div class="card"><h3>Lessons</h3><p class="muted" style="margin-top:0">Rules learned from mistakes and your corrections. They're used on similar tasks, fade if they keep proving wrong, and you can delete any of them.</p><div id="lessons"></div></div>
+      <div class="card"><h3>Playbooks</h3><p class="muted" style="margin-top:0">Plans that worked 3+ times, reused for similar requests.</p><div id="playbooks"></div></div>
+      <div class="card"><h3>Proposed prompt changes</h3><p class="muted" style="margin-top:0">Adopted only if evals don't regress (<code>python -m evals.run_evals</code>).</p><div id="candidates"></div></div>
+    </section>
+
+    <!-- DOCS VIEW -->
+    <section id="view-docs" hidden>
+      <div class="card">
+        <h3>Upload a document</h3>
+        <p class="muted" style="margin-top:0">PDF, Word (.docx), CSV, TXT or Markdown. The knowledge agent searches these.</p>
+        <div class="row"><input type="file" id="file" accept=".pdf,.docx,.csv,.txt,.md,.json"><span class="spacer"></span><button id="upload" class="primary">Upload</button></div>
+        <div id="uploadResult" class="muted" style="margin-top:8px"></div>
+      </div>
+      <div class="card">
+        <h3>Ask your documents</h3>
+        <div class="row"><input type="text" id="question" placeholder="e.g. What is the notice period?" style="flex:1"><button id="ask" class="primary">Ask</button></div>
+        <div id="answer" style="margin-top:12px"></div>
+      </div>
+    </section>
+  </main>
+</div>
+<div class="toast" id="toast"></div>
+
+<script>
+"use strict";
+const $ = (s) => document.querySelector(s);
+const ACTIVE = new Set(["queued", "planning", "running"]);
+const STATUS_TEXT = { queued: "Queued", planning: "Planning", running: "Running", done: "Done", failed: "Failed",
+  waiting_approval: "Needs your approval", needs_input: "Needs your answer", blocked: "Waiting", pending: "Pending" };const EXAMPLES = [
+  "Will it rain in Pune today, and what does my lease say about the notice period?",
+  "Draft an email to my landlord about the leaking kitchen tap, citing the lease repair clause",
+  "Add a to-do to pay rent before the 5th",
+];
+
+/* Build DOM safely: all text goes through textContent, never innerHTML. */
+function el(tag, attrs = {}, ...kids) {
+  const n = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === "class") n.className = v;
+    else if (k.startsWith("on")) n.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) n.setAttribute(k, v === true ? "" : v);
+  }
+  for (const k of kids.flat()) if (k != null && k !== false) n.append(k instanceof Node ? k : String(k));
+  return n;
+}
+const pill = (status) => el("span", { class: `pill ${status}` }, ACTIVE.has(status) ? el("span", { class: "spin" }) : null, STATUS_TEXT[status] || status);
+
+function toast(msg) { const t = $("#toast"); t.textContent = msg; t.classList.add("show"); setTimeout(() => t.classList.remove("show"), 2200); }
+
+async function api(path, opts = {}) {
+  const res = await fetch(path, { headers: opts.body && !(opts.body instanceof FormData) ? { "Content-Type": "application/json" } : {}, ...opts });
+  const body = await res.json().catch(() => ({}));
+  if (!res.ok) { const e = new Error(body.detail || res.statusText); e.status = res.status; throw e; }
+  return body;
+}
+const post = (path, data) => api(path, { method: "POST", body: JSON.stringify(data) });
+
+/* ---------------- views ---------------- */
+let currentTaskId = null, pollTimer = null;
+function show(view) {
+  for (const v of ["task", "learning", "docs"]) $(`#view-${v}`).hidden = v !== view;
+  document.querySelectorAll("nav button").forEach((b) => b.classList.toggle("active", b.dataset.view === view));
+  if (view === "learning") loadLearning();
+}
+document.querySelectorAll("nav button").forEach((b) => b.addEventListener("click", () => {
+  if (b.dataset.view === "task") { currentTaskId = null; stopPoll(); $("#task").replaceChildren(); $("#prompt").focus(); renderHistory(); }
+  show(b.dataset.view);
+}));
+
+/* ---------------- history ---------------- */
+let historyCache = [];
+async function loadHistory() {
+  try { historyCache = await api("/assistant/tasks?limit=30"); renderHistory(); }
+  catch (e) { $("#history").replaceChildren(el("div", { class: "muted", style: "padding:8px" }, "Couldn't load tasks: " + e.message)); }
+}
+function renderHistory() {
+  const box = $("#history");
+  if (!historyCache.length) { box.replaceChildren(el("div", { class: "muted", style: "padding:8px" }, "No tasks yet.")); return; }
+  box.replaceChildren(...historyCache.map((t) => el("button", {
+    class: "hitem" + (t.task_id === currentTaskId ? " active" : ""), onclick: () => openTask(t.task_id) },
+    el("div", { class: "q" }, t.request),
+    el("div", { class: "meta" }, pill(t.status), new Date(t.updated_at).toLocaleString([], { dateStyle: "short", timeStyle: "short" })))));
+}
+
+/* ---------------- run + poll ---------------- */
+async function runTask(text) {
+  text = (text ?? $("#prompt").value).trim();
+  if (!text) return;
+  $("#run").disabled = true;
+  try {
+    const { task_id } = await post("/assistant/task", { message: text, wait: false });
+    $("#prompt").value = "";
+    currentTaskId = task_id;
+    renderTask({ task_id, request: text, status: "queued", steps: [], pending_approvals: [], actions_taken: [], errors: [], lessons_used: [] });
+    poll();
+  } catch (e) { toast("Couldn't start: " + e.message); }
+  finally { $("#run").disabled = false; }
+}
+function stopPoll() { clearTimeout(pollTimer); pollTimer = null; }
+async function poll() {
+  stopPoll();
+  const id = currentTaskId;
+  if (!id) return;
+  try {
+    const t = await api(`/assistant/task/${id}`);
+    if (id !== currentTaskId) return;
+    renderTask(t);
+    if (ACTIVE.has(t.status)) pollTimer = setTimeout(poll, 1500); else loadHistory();
+  } catch (e) {
+    if (e.status === 404) pollTimer = setTimeout(poll, 1000);   // still in intake, not saved yet
+    else toast("Lost connection: " + e.message);
+  }
+}
+async function openTask(id) { show("task"); currentTaskId = id; renderHistory(); await poll(); }
+
+/* ---------------- task rendering ---------------- */
+function stageStates(t) {
+  const s = t.status, steps = t.steps || [];
+  const anyRun = steps.some((x) => x.status !== "pending");
+  const order = ["Intake", "Plan", "Act", "Check", "Report"];
+  let reached = { queued: 0, planning: 1, running: anyRun ? 2 : 1, waiting_approval: 2, needs_input: 1, done: 5, failed: -1 }[s] ?? 0;
+  if (s === "running" && steps.some((x) => x.status === "done")) reached = 3;
+  return order.map((name, i) => {
+    let cls = i < reached ? "done" : i === reached ? "now" : "";
+    if (s === "waiting_approval" && i === 2) cls = "stop";
+    if (s === "needs_input" && i === 1) cls = "stop";
+    if (s === "failed") cls = i === 4 ? "" : (steps.length && i < 2) ? "done" : i === 2 ? "fail" : "";
+    if (s === "done") cls = "done";
+    return el("div", { class: `stage ${cls}` }, name);
+  });
+}
+
+function renderTask(t) {
+  const box = $("#task");
+  const parts = [];
+
+  parts.push(el("div", { class: "card" },
+    el("div", { class: "row" }, el("strong", { style: "font-size:15px" }, t.request), el("span", { class: "spacer" }), pill(t.status)),
+    el("div", { class: "pipeline" }, stageStates(t)),
+    t.lessons_used?.length ? el("details", { style: "margin-top:8px" }, el("summary", {}, `Used ${t.lessons_used.length} lesson(s) from past tasks`),
+      el("ul", { class: "plain" }, t.lessons_used.map((l) => el("li", {}, l)))) : null));
+
+  if (t.pending_approvals?.length) {
+    parts.push(el("div", { class: "card" }, el("h3", {}, "Waiting for your approval"),
+      el("p", { class: "muted", style: "margin:0" }, "Nothing has been sent. Your policy doesn't let me do these on my own."),
+      t.pending_approvals.map((a) => approvalCard(t.task_id, a))));
+  }
+  if (t.status === "needs_input") {
+    const input = el("input", { type: "text", placeholder: "Your answer" });
+    parts.push(el("div", { class: "card" }, el("h3", {}, "I need one detail"), el("p", { class: "report", style: "margin-top:0" }, t.report),
+      el("div", { class: "row" }, input, el("button", { class: "primary", onclick: async (ev) => {
+        if (!input.value.trim()) return; ev.target.disabled = true;
+        try { renderTask(await post(`/assistant/task/${t.task_id}/clarify`, { answer: input.value })); loadHistory(); }
+        catch (e) { toast(e.message); ev.target.disabled = false; } } }, "Continue"))));
+  }
+
+  if (t.steps?.length) {
+    parts.push(el("div", { class: "card" }, el("h3", {}, `Plan · ${t.steps.length} step${t.steps.length > 1 ? "s" : ""}`),
+      t.steps.map((s) => el("div", { class: "step" },
+        el("div", { class: "row" }, el("span", { class: "cap" }, s.capability), el("span", { class: "muted" }, "agent"),
+          s.attempts > 1 ? el("span", { class: "muted" }, `· ${s.attempts} attempts`) : null, el("span", { class: "spacer" }),
+          pill(t.status === "running" && s.status === "pending" && (s.depends_on || []).every((d) => t.steps.find((x) => x.step_id === d)?.status === "done") ? "running" : s.status)),
+        el("div", {}, s.instruction),
+        s.output ? el("div", { class: "out" }, s.output) : null))));
+  } else if (ACTIVE.has(t.status)) {
+    parts.push(el("div", { class: "card muted" }, "Understanding the request and planning…"));
+  }
+
+  if (t.report && t.status !== "needs_input") {
+    parts.push(el("div", { class: "card" }, el("h3", {}, "Report"), el("div", { class: "report" }, t.report)));
+  }
+  if (t.actions_taken?.length) {
+    parts.push(el("div", { class: "card" }, el("h3", {}, "Actions taken for you"),
+      el("ul", { class: "plain" }, t.actions_taken.map((a) => el("li", {}, el("code", {}, a.kind), " — ", a.summary)))));
+  }
+  if (!ACTIVE.has(t.status) && t.status !== "queued") {
+    parts.push(el("div", { class: "card" }, el("div", { class: "stats" },
+      el("div", {}, el("b", {}, t.llm_calls ?? 0), "AI calls"),
+      el("div", {}, el("b", {}, "$" + (t.cost_usd ?? 0).toFixed(4)), "cost"),
+      el("div", {}, el("b", {}, t.replans ?? 0), "replans"),
+      el("div", {}, el("b", {}, t.task_id), "task id")),
+      t.errors?.length ? el("details", { style: "margin-top:10px" }, el("summary", {}, `${t.errors.length} problem(s) handled along the way`),
+        el("ul", { class: "plain" }, t.errors.map((e) => el("li", {}, e)))) : null));
+    if (["done", "failed", "waiting_approval"].includes(t.status)) parts.push(feedbackCard(t));
+  }
+  box.replaceChildren(...parts);
+}
+
+function approvalCard(taskId, a) {
+  const p = a.params || {};
+  const known = ["to", "subject", "body"];
+  const decide = async (approve, btn) => {
+    btn.closest(".approval").querySelectorAll("button").forEach((b) => (b.disabled = true));
+    try {
+      const t = await post(`/assistant/task/${taskId}/approve`, approve ? { approve: [a.action_id] } : { reject: [a.action_id] });
+      toast(approve ? "Approved: continuing" : "Declined"); renderTask(t); loadHistory();
+    } catch (e) { toast(e.message); btn.closest(".approval").querySelectorAll("button").forEach((b) => (b.disabled = false)); }
+  };
+  return el("div", { class: "approval" },
+    el("div", { class: "row" }, el("code", {}, a.kind)),
+    el("div", {}, a.summary),
+    el("dl", { class: "kv" },
+      p.to ? [el("dt", {}, "To"), el("dd", {}, Array.isArray(p.to) ? p.to.join(", ") : p.to)] : null,
+      p.subject ? [el("dt", {}, "Subject"), el("dd", {}, p.subject)] : null,
+      Object.entries(p).filter(([k]) => !known.includes(k)).map(([k, v]) => [el("dt", {}, k), el("dd", {}, typeof v === "string" ? v : JSON.stringify(v))])),
+    p.body ? el("pre", {}, p.body) : null,
+    el("div", { class: "row" },
+      el("button", { class: "primary", onclick: (e) => decide(true, e.target) }, "Approve"),
+      el("button", { class: "danger", onclick: (e) => decide(false, e.target) }, "Decline")));
+}
+
+function feedbackCard(t) {
+  let rating = null;
+  const up = el("button", { onclick: () => pick("up") }, "👍 Good"), down = el("button", { onclick: () => pick("down") }, "👎 Not right");
+  const correction = el("textarea", { rows: 2, placeholder: "What should I do differently next time? (optional)" });
+  const sig = el("input", { type: "text", placeholder: "Sign emails as… (optional, remembered)" });
+  const undo = el("input", { type: "checkbox", id: "undo-" + t.task_id });
+  const send = el("button", { class: "primary", onclick: submit }, "Send feedback");
+  const result = el("div", { class: "muted", style: "margin-top:8px" });
+  function pick(r) { rating = r; up.classList.toggle("sel", r === "up"); down.classList.toggle("sel", r === "down"); }
+  async function submit() {
+    send.disabled = true;
+    const prefs = sig.value.trim() ? { signature: sig.value.trim() } : {};
+    try {
+      const { learned } = await post(`/assistant/task/${t.task_id}/feedback`,
+        { rating, correction: correction.value, preferences: prefs, undo: undo.checked });
+      result.textContent = learned.lesson ? `Learned: “${learned.lesson}”` : `Thanks. Episode scored ${learned.score}.`;
+      toast("Feedback saved");
+    } catch (e) { toast(e.message); send.disabled = false; }
+  }
+  return el("div", { class: "card" }, el("h3", {}, "How did I do?"),
+    el("div", { class: "row thumbs" }, up, down),
+    el("div", { style: "margin-top:10px;display:grid;gap:8px" }, correction, sig,
+      el("label", { class: "row muted", for: "undo-" + t.task_id }, undo, "Undo the reversible things this task did (drafts, holds, to-dos)")),
+    el("div", { class: "row", style: "margin-top:10px" }, el("span", { class: "spacer" }), send), result);
+}
+
+/* ---------------- learning ---------------- */
+async function loadLearning() {
+  try {
+    const d = await api("/assistant/learning");
+    $("#lessons").replaceChildren(...(d.lessons.length ? d.lessons.map((l) => el("div", { class: "lesson" },
+      el("div", { class: "bar", title: `weight ${l.weight}` }, el("i", { style: `width:${Math.min(100, l.weight * 50)}%` })),
+      el("div", { style: "flex:1" }, l.text),
+      el("button", { class: "danger", onclick: async () => { await api(`/assistant/lessons/${l.id}`, { method: "DELETE" }); toast("Forgotten"); loadLearning(); } }, "Forget")))
+      : [el("div", { class: "empty" }, "No lessons yet. Give 👎 with a correction on a task and I'll learn from it.")]));
+    $("#playbooks").replaceChildren(...(d.playbooks.length ? d.playbooks.map((p) => el("div", { class: "lesson" },
+      el("div", { style: "flex:1" }, p.intent), el("span", { class: "muted" }, `worked ${p.support}×`)))
+      : [el("div", { class: "empty" }, "None yet.")]));
+    $("#candidates").replaceChildren(...(d.prompt_candidates.length ? d.prompt_candidates.map((c) => el("div", { class: "lesson" },
+      el("code", {}, c.agent), el("div", { style: "flex:1" }, c.reason)))
+      : [el("div", { class: "empty" }, "None pending.")]));
+  } catch (e) { toast("Couldn't load: " + e.message); }
+}
+
+/* ---------------- documents ---------------- */
+$("#upload").addEventListener("click", async () => {
+  const f = $("#file").files[0];
+  if (!f) return toast("Choose a file first");
+  const fd = new FormData(); fd.append("file", f);
+  $("#upload").disabled = true; $("#uploadResult").textContent = "Uploading and indexing…";
+  try { const r = await api("/rag/upload", { method: "POST", body: fd }); $("#uploadResult").textContent = `Stored ${r.stored_chunks} chunk(s) from ${r.sources.join(", ")}.`; }
+  catch (e) { $("#uploadResult").textContent = "Upload failed: " + e.message; }
+  finally { $("#upload").disabled = false; }
+});
+async function ask() {
+  const q = $("#question").value.trim(); if (!q) return;
+  $("#ask").disabled = true; $("#answer").replaceChildren(el("span", { class: "muted" }, "Searching…"));
+  try {
+    const r = await post("/rag/query", { query: q, k: 3 });
+    $("#answer").replaceChildren(el("div", { class: "report" }, r.answer),
+      el("details", { style: "margin-top:8px" }, el("summary", {}, "Sources"),
+        r.top_chunks.map((c) => el("div", { class: "step" }, el("div", { class: "src" }, `${c.source} · score ${c.score}`), el("div", {}, c.text)))));
+  } catch (e) { $("#answer").replaceChildren(el("span", { class: "muted" }, "Error: " + e.message)); }
+  finally { $("#ask").disabled = false; }
+}
+$("#ask").addEventListener("click", ask);
+$("#question").addEventListener("keydown", (e) => { if (e.key === "Enter") ask(); });
+
+/* ---------------- boot ---------------- */
+$("#run").addEventListener("click", () => runTask());
+$("#prompt").addEventListener("keydown", (e) => { if (e.key === "Enter" && (e.ctrlKey || e.metaKey)) runTask(); });
+$("#examples").replaceChildren(...EXAMPLES.map((x) => el("button", { class: "chip", onclick: () => { $("#prompt").value = x; $("#prompt").focus(); } }, x)));
+api("/").then(() => $("#health").classList.add("ok")).catch(() => $("#health").classList.add("bad"));
+loadHistory();
+</script>
+</body>
+</html>

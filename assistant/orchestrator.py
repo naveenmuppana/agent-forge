@@ -54,22 +54,35 @@ class Assistant:
         self.learner = LearnerAgent(self.llm, self.store, self.prompts)
 
     # =============================== public API ===============================
-    def submit(self, raw_input: str, source: str = "chat", user_id: str = "default") -> TaskState:
-        env, dup, triage = self.intake.run(TaskEnvelope(raw_input=raw_input, source=source, user_id=user_id))
+    def submit(self, raw_input: str, source: str = "chat", user_id: str = "default",
+               task_id: Optional[str] = None) -> TaskState:
+        """`task_id` lets a caller (e.g. the UI) know the id up front and poll while it runs."""
+        env = TaskEnvelope(raw_input=raw_input, source=source, user_id=user_id)
+        if task_id:
+            env.task_id = task_id
+        calls0, cost0 = self.llm.usage.calls, self.llm.usage.cost_usd   # meter intake + planning too
+        env, dup, triage = self.intake.run(env)
         if dup:
             logger.info("Duplicate of active task %s", dup.task_id)
+            if task_id:   # the caller is polling `task_id`: point it at the existing task
+                self._save(TaskState(envelope=env, status=TaskStatus.DONE,
+                                     report=f"Already working on this as task {dup.task_id}."))
             return dup
         state = TaskState(envelope=env)
+        self._save(state)                       # visible as "planning" while context + plan run
         state.context = self.context.run(env)
         if not triage.actionable:
             state.status = TaskStatus.NEEDS_INPUT
             state.report = triage.clarification_question or "Could you give me a bit more detail?"
+            self._meter(state, calls0, cost0)
             self._save(state)
             return state
         try:
             state.plan = self.planner.run(env, state.context)
         except PlanError as exc:
+            self._meter(state, calls0, cost0)
             return self._fail(state, f"planning failed: {exc}")
+        self._meter(state, calls0, cost0)
         state.status = TaskStatus.RUNNING
         self._save(state)
         return self.run(state.task_id)
@@ -165,6 +178,9 @@ class Assistant:
 
     def get(self, task_id: str) -> Optional[TaskState]:
         return self.store.load_task(task_id)
+
+    def recent(self, limit: int = 20) -> list[TaskState]:
+        return self.store.recent_tasks(limit)
 
     # =============================== internals ===============================
     def _dispatch(self, state: TaskState, ready: list[PlanStep]) -> list[tuple[PlanStep, StepResult]]:

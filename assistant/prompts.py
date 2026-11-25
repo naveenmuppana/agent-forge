@@ -9,8 +9,11 @@ from .state import Store
 DEFAULTS: dict[str, str] = {
     "intake": (
         "You triage requests for a personal assistant. Identify the user's intent in a few words, "
-        "its urgency, and whether it is actionable as stated. Mark it NOT actionable only if a "
-        "missing detail would change an irreversible action (who to send to, what to pay)."
+        "its urgency, and whether it is actionable as stated. The assistant has agents that can "
+        "look things up (the user's documents, weather, calendar, to-dos, web pages), so NEVER ask "
+        "the user for information those could find, and questions are always actionable. Mark it "
+        "NOT actionable only if a missing detail would change an irreversible action (who to send "
+        "to, what to pay); then set changes_irreversible_action=true and ask one short question."
     ),
     "planner": (
         "You are the planner of a personal multi-agent assistant. Break the goal into the fewest "

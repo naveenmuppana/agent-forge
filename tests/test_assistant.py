@@ -205,9 +205,20 @@ class EndToEndTests(unittest.TestCase):
         self.assertEqual(st.status, TaskStatus.FAILED)
         self.assertTrue(any("budget" in e for e in st.errors))
 
+    def test_intake_cannot_stop_for_lookups(self):
+        # Seen live: intake asked the user for lease terms the knowledge agent can find.
+        s = Script()
+        s.intake = lambda u, i: {"intent": "lease q", "actionable": False, "clarification_question": "What are your lease terms?"}
+        s.planner = lambda u, i: {"goal": "g", "steps": [step("s1", "knowledge", "find deposit")]}
+        s.specialists["knowledge"] = tool_then_final("search_docs", {"query": "deposit"}, "INR 75,000")
+        st = make(s).submit("What does my lease say about the deposit?")
+        self.assertEqual(st.status, TaskStatus.DONE, st.errors)
+        self.assertGreaterEqual(st.llm_calls, 3)        # intake + planning are metered too
+
     def test_needs_input_then_clarify(self):
         s = Script()
-        s.intake = lambda u, i: {"intent": "email", "actionable": False, "clarification_question": "Which Priya?"}
+        s.intake = lambda u, i: {"intent": "email", "actionable": False, "changes_irreversible_action": True,
+                                 "clarification_question": "Which Priya?"}
         s.planner = lambda u, i: {"goal": "g", "steps": [step("s1", "utility", "x")]}
         s.specialists["utility"] = tool_then_final("get_weather", {"city": "x"}, "ok")
         a = make(s)
